@@ -6,7 +6,6 @@ use winapi::{
     um::processenv::GetStdHandle,
     um::winbase::STD_INPUT_HANDLE,
     um::wincon::{ENABLE_ECHO_INPUT, ENABLE_VIRTUAL_TERMINAL_INPUT},
-    um::consoleapi::ReadConsoleA,
 };
 
 #[cfg(not(windows))]
@@ -115,46 +114,6 @@ impl Getch {
         }
     }
 
-    #[cfg(windows)]
-    pub fn getch(&self) -> Result<Key, std::io::Error> {
-        let (chars_read, buf) = unsafe {
-            let input_handle = GetStdHandle(STD_INPUT_HANDLE);
-            let mut buffer: [u8; 2] = [0; 2];
-            let mut chars_read = 0;
-            ReadConsoleA(input_handle, buffer.as_mut_ptr() as *mut _, buffer.len() as _, &mut chars_read, std::ptr::null_mut());
-            (chars_read, buffer)
-        };
-        let source = &mut std::io::stdin();
-
-        if self.leftover.borrow().is_some() {
-            // we have a leftover byte, use it
-            let c = self.leftover.borrow().unwrap();
-            self.leftover.replace(None);
-            return parse_key(c, &mut source.bytes());
-        }
-
-        match chars_read {
-            0 => Ok(Key::Null),
-            1 => {
-                match buf[0] {
-                    b'\x1B' => Ok(Key::Esc),
-                    c => parse_key(c, &mut source.bytes()),
-                }
-            },
-            2 => {
-                let option_iter = &mut Some(buf[1]).into_iter();
-                let result = {
-                    let mut iter = option_iter.map(Ok).chain(source.bytes());
-                    parse_key(buf[0], &mut iter)
-                };
-                // If the option_iter wasn't consumed, keep the byte for later.
-                self.leftover.replace(option_iter.next());
-                result
-            },
-            _ => unreachable!(),
-        }
-    }
-    #[cfg(not(windows))]
     #[allow(clippy::unused_io_amount)]
     pub fn getch(&self) -> Result<Key, std::io::Error> {
         let source = &mut std::io::stdin();
