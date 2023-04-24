@@ -1,29 +1,24 @@
 #[cfg(windows)]
-use libc::c_int;
-#[cfg(windows)]
 use winapi::{
+    shared::minwindef::DWORD,
     um::consoleapi::{GetConsoleMode, SetConsoleMode},
     um::handleapi::INVALID_HANDLE_VALUE,
     um::processenv::GetStdHandle,
     um::winbase::STD_INPUT_HANDLE,
-    um::wincon::ENABLE_ECHO_INPUT,
+    um::wincon::{ENABLE_ECHO_INPUT, ENABLE_VIRTUAL_TERMINAL_INPUT},
 };
-
-#[cfg(windows)]
-extern "C" {
-    fn _getch() -> c_int;
-}
 
 #[cfg(not(windows))]
 use nix::sys::termios;
-#[cfg(not(windows))]
+
 use std::io::Read;
-#[cfg(not(windows))]
 use std::cell::RefCell;
 
-
 #[cfg(windows)]
-pub struct Getch {}
+pub struct Getch {
+    orig_term: DWORD,
+    leftover: RefCell<Option<u8>>,
+}
 
 #[cfg(not(windows))]
 pub struct Getch {
@@ -83,7 +78,19 @@ impl Getch {
     #[cfg(windows)]
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self {}
+        let mut console_mode: DWORD= 0;
+
+        unsafe {
+            let input_handle = GetStdHandle(STD_INPUT_HANDLE);
+            if GetConsoleMode(input_handle, &mut console_mode) != 0 {
+                SetConsoleMode(input_handle, console_mode | ENABLE_VIRTUAL_TERMINAL_INPUT);
+            }
+        }
+
+        Self {
+            orig_term: console_mode,
+            leftover: RefCell::new(None),
+        }
     }
     #[cfg(not(windows))]
     #[allow(clippy::new_without_default)]
@@ -107,63 +114,6 @@ impl Getch {
         }
     }
 
-    #[cfg(windows)]
-    pub fn getch(&self) -> Result<Key, std::io::Error> {
-        use winapi::um::winuser::{GetKeyState, VK_MENU};
-
-        unsafe {
-            match _getch() {
-                0x00 | 0xE0 => {
-                    match _getch() {
-                        0x48 => Ok(Key::Up),
-                        0x50 => Ok(Key::Down),
-                        0x4D => Ok(Key::Right),
-                        0x4B => Ok(Key::Left),
-                        0x47 => Ok(Key::Home),
-                        0x4F => Ok(Key::End),
-                        0x49 => Ok(Key::PageUp),
-                        0x51 => Ok(Key::PageDown),
-                        0x52 => Ok(Key::Insert),
-                        0x53 => Ok(Key::Delete),
-                        v @ 0x3B..=0x44 => {
-                            Ok(Key::F((v - 0x3B + 1) as u8))
-                        },
-                        0x85 => Ok(Key::F(11)),
-                        0x86 => Ok(Key::F(12)),
-                        0x73 => Ok(Key::Other(vec![ b'\x1B', b'[', b'1', b';', b'5', b'D' ])),  // Ctrl+Left
-                        0x74 => Ok(Key::Other(vec![ b'\x1B', b'[', b'1', b';', b'5', b'C' ])),  // Ctrl+Right
-                        0x8D => Ok(Key::Other(vec![ b'\x1B', b'[', b'1', b';', b'5', b'A' ])),  // Ctrl+Up
-                        0x91 => Ok(Key::Other(vec![ b'\x1B', b'[', b'1', b';', b'5', b'B' ])),  // Ctrl+Down
-                        c    => Ok(Key::Other(vec![ b'\x1B', c as u8 ])),
-                    }
-                },
-                0x08 => Ok(Key::Backspace),
-                0x1B => Ok(Key::Esc),
-                0x7F => Ok(Key::Delete),
-                0x0A => Ok(Key::Char('\n')),
-                0x0D => Ok(Key::Char('\r')),
-                0x09 => Ok(Key::Char('\t')),
-                c @ 0x01..=0x1A => {
-                    Ok(Key::Ctrl((c as u8 + b'a' - 1) as char))
-                },
-                c => {
-                    Ok(
-                        match parse_utf8_char(c as u8)? {
-                            Ok(ch) => {
-                                if GetKeyState(VK_MENU) < 0 {
-                                    Key::Alt(ch)
-                                } else {
-                                    Key::Char(ch)
-                                }
-                            },
-                            Err(vec) => Key::Other(vec),
-                        }
-                    )
-                }
-            }
-        }
-    }
-    #[cfg(not(windows))]
     #[allow(clippy::unused_io_amount)]
     pub fn getch(&self) -> Result<Key, std::io::Error> {
         let source = &mut std::io::stdin();
@@ -205,7 +155,7 @@ pub fn enable_echo_input() {
     #[cfg(windows)]
     unsafe {
         let input_handle = GetStdHandle(STD_INPUT_HANDLE);
-        let mut console_mode: u32 = 0;
+        let mut console_mode: DWORD= 0;
 
         if input_handle == INVALID_HANDLE_VALUE {
             return;
@@ -229,7 +179,7 @@ pub fn disable_echo_input() {
     #[cfg(windows)]
     unsafe {
         let input_handle = GetStdHandle(STD_INPUT_HANDLE);
-        let mut console_mode: u32 = 0;
+        let mut console_mode: DWORD= 0;
 
         if input_handle == INVALID_HANDLE_VALUE {
             return;
@@ -249,7 +199,6 @@ pub fn disable_echo_input() {
 }
 
 /// Parse an Event from `item` and possibly subsequent bytes through `iter`.
-#[cfg(not(windows))]
 fn parse_key<I>(item: u8, iter: &mut I) -> Result<Key, std::io::Error>
 where
     I: Iterator<Item = Result<u8, std::io::Error>>
@@ -297,7 +246,6 @@ where
 /// Parses a CSI sequence, just after reading ^[
 ///
 /// Returns None if an unrecognized sequence is found.
-#[cfg(not(windows))]
 fn parse_csi<I>(iter: &mut I) -> Result<Key, std::io::Error>
 where
      I: Iterator<Item = Result<u8, std::io::Error>>
@@ -374,29 +322,6 @@ where
 }
 
 /// Parse `c` as either a single byte ASCII char or a variable size UTF-8 char.
-#[cfg(windows)]
-fn parse_utf8_char(c: u8) -> Result<Result<char, Vec<u8>>, std::io::Error> {
-    if c.is_ascii() {
-        Ok(Ok(c as char))
-    } else {
-        let bytes = &mut Vec::new();
-        bytes.push(c);
-
-        loop {
-            let next = unsafe { _getch() } as u8;
-            bytes.push(next);
-            if let Ok(st) = std::str::from_utf8(bytes) {
-                return Ok(Ok(st.chars().next().unwrap()));
-            }
-            if bytes.len() >= 4 {
-                return Ok(Err(bytes.to_vec()));
-            }
-        }
-    }
-}
-
-/// Parse `c` as either a single byte ASCII char or a variable size UTF-8 char.
-#[cfg(not(windows))]
 fn parse_utf8_char<I>(c: u8, iter: &mut I) -> Result<Result<char, Vec<u8>>, std::io::Error>
 where
      I: Iterator<Item = Result<u8, std::io::Error>>
@@ -426,7 +351,12 @@ where
 
 impl Drop for Getch {
     #[cfg(windows)]
-    fn drop(&mut self) {}
+    fn drop(&mut self) {
+        unsafe {
+            let input_handle = GetStdHandle(STD_INPUT_HANDLE);
+            SetConsoleMode(input_handle, self.orig_term);
+        }
+    }
 
     #[cfg(not(windows))]
     fn drop(&mut self) {
