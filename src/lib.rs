@@ -5,7 +5,7 @@ use winapi::{
     um::handleapi::INVALID_HANDLE_VALUE,
     um::processenv::GetStdHandle,
     um::winbase::STD_INPUT_HANDLE,
-    um::wincon::{ENABLE_ECHO_INPUT, ENABLE_VIRTUAL_TERMINAL_INPUT},
+    um::wincon::{ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT, ENABLE_VIRTUAL_TERMINAL_INPUT},
 };
 
 #[cfg(not(windows))]
@@ -83,7 +83,7 @@ impl Getch {
         unsafe {
             let input_handle = GetStdHandle(STD_INPUT_HANDLE);
             if GetConsoleMode(input_handle, &mut console_mode) != 0 {
-                SetConsoleMode(input_handle, console_mode | ENABLE_VIRTUAL_TERMINAL_INPUT);
+                SetConsoleMode(input_handle, (console_mode | ENABLE_VIRTUAL_TERMINAL_INPUT) & !ENABLE_LINE_INPUT);
             }
         }
 
