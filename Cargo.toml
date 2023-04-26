@@ -1,6 +1,6 @@
 [package]
 name = "getch-rs"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["kumavale"]
 description = "`getch` for Windows and Unix."
