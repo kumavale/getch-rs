@@ -11,8 +11,8 @@ use winapi::{
 #[cfg(not(windows))]
 use nix::sys::termios;
 
-use std::io::Read;
 use std::cell::RefCell;
+use std::io::Read;
 
 #[cfg(windows)]
 pub struct Getch {
@@ -23,9 +23,8 @@ pub struct Getch {
 #[cfg(not(windows))]
 pub struct Getch {
     orig_term: termios::Termios,
-    leftover:  RefCell<Option<u8>>,
+    leftover: RefCell<Option<u8>>,
 }
-
 
 /// Keys
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -78,7 +77,7 @@ impl Getch {
     #[cfg(windows)]
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        let mut console_mode: DWORD= 0;
+        let mut console_mode: DWORD = 0;
 
         unsafe {
             let input_handle = GetStdHandle(STD_INPUT_HANDLE);
@@ -128,11 +127,9 @@ impl Getch {
 
         match source.read(&mut buf) {
             Ok(0) => Ok(Key::Null),
-            Ok(1) => {
-                match buf[0] {
-                    b'\x1B' => Ok(Key::Esc),
-                    c => parse_key(c, &mut source.bytes()),
-                }
+            Ok(1) => match buf[0] {
+                b'\x1B' => Ok(Key::Esc),
+                c => parse_key(c, &mut source.bytes()),
             },
             Ok(2) => {
                 let option_iter = &mut Some(buf[1]).into_iter();
@@ -143,7 +140,7 @@ impl Getch {
                 // If the option_iter wasn't consumed, keep the byte for later.
                 self.leftover.replace(option_iter.next());
                 result
-            },
+            }
             Ok(_) => unreachable!(),
             Err(e) => Err(e),
         }
@@ -155,7 +152,7 @@ pub fn enable_echo_input() {
     #[cfg(windows)]
     unsafe {
         let input_handle = GetStdHandle(STD_INPUT_HANDLE);
-        let mut console_mode: DWORD= 0;
+        let mut console_mode: DWORD = 0;
 
         if input_handle == INVALID_HANDLE_VALUE {
             return;
@@ -179,7 +176,7 @@ pub fn disable_echo_input() {
     #[cfg(windows)]
     unsafe {
         let input_handle = GetStdHandle(STD_INPUT_HANDLE);
-        let mut console_mode: DWORD= 0;
+        let mut console_mode: DWORD = 0;
 
         if input_handle == INVALID_HANDLE_VALUE {
             return;
@@ -201,46 +198,40 @@ pub fn disable_echo_input() {
 /// Parse an Event from `item` and possibly subsequent bytes through `iter`.
 fn parse_key<I>(item: u8, iter: &mut I) -> Result<Key, std::io::Error>
 where
-    I: Iterator<Item = Result<u8, std::io::Error>>
+    I: Iterator<Item = Result<u8, std::io::Error>>,
 {
-        match item {
-            b'\x1B' => {
-                Ok(match iter.next() {
-                    Some(Ok(b'[')) => parse_csi(iter)?,
-                    Some(Ok(b'O')) => {
-                        match iter.next() {
-                            // F1-F4
-                            Some(Ok(val @ b'P'..=b'S')) => Key::F(1 + val - b'P'),
-                            Some(Ok(val)) => Key::Other(vec![ b'\x1B', b'O', val ]),
-                            _ => Key::Other(vec![ b'\x1B', b'O' ]),
-                        }
-                    },
-                    Some(Ok(c)) => {
-                        match parse_utf8_char(c, iter)? {
-                            Ok(ch)   => Key::Alt(ch),
-                            Err(vec) => Key::Other(vec),
-                        }
-                    },
-                    Some(Err(e)) => return Err(e),
-                    None => Key::Esc,
-                })
-            },
-            b'\n' | b'\r'         => Ok(Key::Char('\r')),
-            b'\t'                 => Ok(Key::Char('\t')),
-            b'\x08'               => Ok(Key::Backspace),
-            b'\x7F'               => Ok(Key::Delete),
-            c @ b'\x01'..=b'\x1A' => Ok(Key::Ctrl((c - 0x1  + b'a') as char)),
-            c @ b'\x1C'..=b'\x1F' => Ok(Key::Ctrl((c - 0x1C + b'4') as char)),
-            b'\0'                 => Ok(Key::Null),
-            c => {
-                Ok(
-                    match parse_utf8_char(c, iter)? {
-                        Ok(ch)   => Key::Char(ch),
-                        Err(vec) => Key::Other(vec),
+    match item {
+        b'\x1B' => {
+            Ok(match iter.next() {
+                Some(Ok(b'[')) => parse_csi(iter)?,
+                Some(Ok(b'O')) => {
+                    match iter.next() {
+                        // F1-F4
+                        Some(Ok(val @ b'P'..=b'S')) => Key::F(1 + val - b'P'),
+                        Some(Ok(val)) => Key::Other(vec![b'\x1B', b'O', val]),
+                        _ => Key::Other(vec![b'\x1B', b'O']),
                     }
-                )
-            }
+                }
+                Some(Ok(c)) => match parse_utf8_char(c, iter)? {
+                    Ok(ch)   => Key::Alt(ch),
+                    Err(vec) => Key::Other(vec),
+                },
+                Some(Err(e)) => return Err(e),
+                None => Key::Esc,
+            })
         }
+        b'\n' | b'\r'         => Ok(Key::Char('\r')),
+        b'\t'                 => Ok(Key::Char('\t')),
+        b'\x08'               => Ok(Key::Backspace),
+        b'\x7F'               => Ok(Key::Delete),
+        c @ b'\x01'..=b'\x1A' => Ok(Key::Ctrl((c - 0x1 + b'a') as char)),
+        c @ b'\x1C'..=b'\x1F' => Ok(Key::Ctrl((c - 0x1C + b'4') as char)),
+        b'\0'                 => Ok(Key::Null),
+        c => Ok(match parse_utf8_char(c, iter)? {
+            Ok(ch)   => Key::Char(ch),
+            Err(vec) => Key::Other(vec),
+        }),
+    }
 }
 
 /// Parses a CSI sequence, just after reading ^[
@@ -248,15 +239,13 @@ where
 /// Returns None if an unrecognized sequence is found.
 fn parse_csi<I>(iter: &mut I) -> Result<Key, std::io::Error>
 where
-     I: Iterator<Item = Result<u8, std::io::Error>>
+    I: Iterator<Item = Result<u8, std::io::Error>>,
 {
     Ok(match iter.next() {
-        Some(Ok(b'[')) => {
-            match iter.next() {
-                Some(Ok(val @ b'A'..=b'E')) => Key::F(1 + val - b'A'),
-                Some(Ok(val)) => Key::Other(vec![ b'\x1B', b'[', b'[', val ]),
-                _ => Key::Other(vec![ b'\x1B', b'[', b'[' ]),
-            }
+        Some(Ok(b'[')) => match iter.next() {
+            Some(Ok(val @ b'A'..=b'E')) => Key::F(1 + val - b'A'),
+            Some(Ok(val)) => Key::Other(vec![b'\x1B', b'[', b'[', val]),
+            _ => Key::Other(vec![b'\x1B', b'[', b'[']),
         },
         Some(Ok(b'A')) => Key::Up,
         Some(Ok(b'B')) => Key::Down,
@@ -285,7 +274,7 @@ where
                     let nums: Vec<u8> = str_buf.split(';').map(|n| n.parse().unwrap()).collect();
 
                     if nums.is_empty() || nums.len() > 1 {
-                        let mut keys = vec![ b'\x1B', b'['];
+                        let mut keys = vec![b'\x1B', b'['];
                         keys.append(&mut buf);
                         return Ok(Key::Other(keys));
                     }
@@ -301,30 +290,30 @@ where
                         v @ 17..=21 => Key::F(v - 11),
                         v @ 23..=24 => Key::F(v - 12),
                         _ => {
-                            let mut keys = vec![ b'\x1B', b'[' ];
+                            let mut keys = vec![b'\x1B', b'['];
                             keys.append(&mut buf);
                             keys.push(nums[0]);
                             return Ok(Key::Other(keys));
-                        },
+                        }
                     }
-                },
+                }
                 _ => {
-                    let mut keys = vec![ b'\x1B', b'[' ];
+                    let mut keys = vec![b'\x1B', b'['];
                     keys.append(&mut buf);
                     keys.push(c);
                     return Ok(Key::Other(keys));
-                },
+                }
             }
-        },
-        Some(Ok(c)) => Key::Other(vec![ b'\x1B', b'[', c ]),
-        _ => Key::Other(vec![ b'\x1B', b'[' ]),
+        }
+        Some(Ok(c)) => Key::Other(vec![b'\x1B', b'[', c]),
+        _ => Key::Other(vec![b'\x1B', b'[']),
     })
 }
 
 /// Parse `c` as either a single byte ASCII char or a variable size UTF-8 char.
 fn parse_utf8_char<I>(c: u8, iter: &mut I) -> Result<Result<char, Vec<u8>>, std::io::Error>
 where
-     I: Iterator<Item = Result<u8, std::io::Error>>
+    I: Iterator<Item = Result<u8, std::io::Error>>,
 {
     if c.is_ascii() {
         Ok(Ok(c as char))
@@ -342,7 +331,7 @@ where
                     if bytes.len() >= 4 {
                         return Ok(Err(bytes.to_vec()));
                     }
-                },
+                }
                 _ => return Ok(Err(bytes.to_vec())),
             }
         }
@@ -362,5 +351,4 @@ impl Drop for Getch {
     fn drop(&mut self) {
         termios::tcsetattr(0, termios::SetArg::TCSADRAIN, &self.orig_term).unwrap();
     }
-
 }
