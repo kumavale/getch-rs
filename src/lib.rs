@@ -83,7 +83,7 @@ impl Getch {
         unsafe {
             let input_handle = GetStdHandle(STD_INPUT_HANDLE);
             if GetConsoleMode(input_handle, &mut console_mode) != 0 {
-                SetConsoleMode(input_handle, (console_mode | ENABLE_VIRTUAL_TERMINAL_INPUT) & !ENABLE_LINE_INPUT);
+                SetConsoleMode(input_handle, ENABLE_VIRTUAL_TERMINAL_INPUT);
             }
         }
 
