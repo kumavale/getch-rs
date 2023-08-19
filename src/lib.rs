@@ -5,7 +5,8 @@ use winapi::{
     um::handleapi::INVALID_HANDLE_VALUE,
     um::processenv::GetStdHandle,
     um::winbase::STD_INPUT_HANDLE,
-    um::wincon::{ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT, ENABLE_VIRTUAL_TERMINAL_INPUT},
+    um::wincon::{ENABLE_ECHO_INPUT, ENABLE_VIRTUAL_TERMINAL_INPUT},
+    um::winuser::{GetKeyState, VK_CONTROL},
 };
 
 #[cfg(not(windows))]
@@ -126,7 +127,14 @@ impl Getch {
         }
 
         match source.read(&mut buf) {
-            Ok(0) => Ok(Key::Null),
+            Ok(0) => {
+                #[cfg(windows)]
+                #[allow(overflowing_literals)]
+                if unsafe { (GetKeyState('Z' as i32) & 0x8000) | (GetKeyState(VK_CONTROL) & 0x8000) != 0 } {
+                    return Ok(Key::Ctrl('z'));
+                }
+                Ok(Key::Null)
+            }
             Ok(1) => match buf[0] {
                 b'\x1B' => Ok(Key::Esc),
                 c => parse_key(c, &mut source.bytes()),
