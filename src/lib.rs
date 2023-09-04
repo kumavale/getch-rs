@@ -6,7 +6,6 @@ use winapi::{
     um::processenv::GetStdHandle,
     um::winbase::STD_INPUT_HANDLE,
     um::wincon::{ENABLE_ECHO_INPUT, ENABLE_VIRTUAL_TERMINAL_INPUT},
-    um::winuser::{GetKeyState, VK_CONTROL},
 };
 
 #[cfg(not(windows))]
@@ -31,7 +30,7 @@ pub struct Getch {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Key {
     /// Null byte.
-    Null,
+    EOF,
     /// Backspace.
     Backspace,
     /// Delete key.
@@ -127,14 +126,7 @@ impl Getch {
         }
 
         match source.read(&mut buf) {
-            Ok(0) => {
-                #[cfg(windows)]
-                #[allow(overflowing_literals)]
-                if unsafe { (GetKeyState('Z' as i32) & 0x8000) | (GetKeyState(VK_CONTROL) & 0x8000) != 0 } {
-                    return Ok(Key::Ctrl('z'));
-                }
-                Ok(Key::Null)
-            }
+            Ok(0) => Ok(Key::Ctrl('z')),
             Ok(1) => match buf[0] {
                 b'\x1B' => Ok(Key::Esc),
                 c => parse_key(c, &mut source.bytes()),
@@ -234,7 +226,7 @@ where
         b'\x7F'               => Ok(Key::Delete),
         c @ b'\x01'..=b'\x1A' => Ok(Key::Ctrl((c - 0x1 + b'a') as char)),
         c @ b'\x1C'..=b'\x1F' => Ok(Key::Ctrl((c - 0x1C + b'4') as char)),
-        b'\0'                 => Ok(Key::Null),
+        b'\0'                 => Ok(Key::EOF),
         c => Ok(match parse_utf8_char(c, iter)? {
             Ok(ch)   => Key::Char(ch),
             Err(vec) => Key::Other(vec),
