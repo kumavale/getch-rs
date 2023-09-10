@@ -35,3 +35,7 @@ fn main() {
 ```
 $ cargo run --example getch
 ```
+
+## Contributing
+
+This project welcomes your PR and issues. For example, fixing bugs, adding features, refactoring, etc.
