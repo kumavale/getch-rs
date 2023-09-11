@@ -1,0 +1,17 @@
+name: Question
+description: Have questions about how to use this?
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got a question on how to do something with this?  
+        Feel free to write to me!!
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: >
+        Enter your question here. Please try to provide as much detail as possible.
+    validations:
+      required: true
