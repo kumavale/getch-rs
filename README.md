@@ -13,7 +13,7 @@ Cargo.toml
 
 ```toml
 [dependencies]
-getch-rs = "0.1"
+getch-rs = "0.2"
 ```
 
 main.rs
