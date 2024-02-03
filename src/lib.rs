@@ -1,3 +1,27 @@
+//! # getch-rs
+//!
+//! `getch` is a C language function designed to capture a single character input from the keyboard without requiring the user to press the Enter key. This function suspends program execution until the user provides input. Typically employed in console-based programs, it proves useful for scenarios where menu selection or awaiting key input is required.
+//!
+//! ## Example
+//!
+//! ```no_run
+//! use getch_rs::{Getch, Key};
+//!
+//! fn main() {
+//!     let g = Getch::new();
+//!
+//!     println!("press `q` to exit");
+//!
+//!     loop {
+//!         match g.getch() {
+//!             Ok(Key::Char('q')) => break,
+//!             Ok(key) => println!("{:?}", key),
+//!             Err(e) => println!("{}", e),
+//!         }
+//!     }
+//! }
+//! ```
+
 #[cfg(windows)]
 use winapi::{
     shared::minwindef::DWORD,
