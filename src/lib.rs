@@ -118,9 +118,11 @@ impl Getch {
     #[cfg(not(windows))]
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
+        let stdin = std::io::stdin();
+
         // Quering original as a separate, since `Termios` does not implement copy
-        let orig_term       = termios::tcgetattr(0).unwrap();
-        let mut raw_termios = termios::tcgetattr(0).unwrap();
+        let orig_term       = termios::tcgetattr(&stdin).unwrap();
+        let mut raw_termios = termios::tcgetattr(&stdin).unwrap();
 
         // Unset canonical mode, so we get characters immediately
         raw_termios.local_flags.remove(termios::LocalFlags::ICANON);
@@ -129,7 +131,7 @@ impl Getch {
         // Disable local echo
         raw_termios.local_flags.remove(termios::LocalFlags::ECHO);
 
-        termios::tcsetattr(0, termios::SetArg::TCSADRAIN, &raw_termios).unwrap();
+        termios::tcsetattr(&stdin, termios::SetArg::TCSADRAIN, &raw_termios).unwrap();
 
         Self {
             orig_term,
@@ -189,9 +191,10 @@ pub fn enable_echo_input() {
 
     #[cfg(not(windows))]
     {
-        let mut raw_termios = termios::tcgetattr(0).unwrap();
+        let stdin = std::io::stdin();
+        let mut raw_termios = termios::tcgetattr(&stdin).unwrap();
         raw_termios.local_flags.insert(termios::LocalFlags::ECHO);
-        termios::tcsetattr(0, termios::SetArg::TCSADRAIN, &raw_termios).unwrap();
+        termios::tcsetattr(&stdin, termios::SetArg::TCSADRAIN, &raw_termios).unwrap();
     }
 }
 
@@ -213,9 +216,10 @@ pub fn disable_echo_input() {
 
     #[cfg(not(windows))]
     {
-        let mut raw_termios = termios::tcgetattr(0).unwrap();
+        let stdin = std::io::stdin();
+        let mut raw_termios = termios::tcgetattr(&stdin).unwrap();
         raw_termios.local_flags.remove(termios::LocalFlags::ECHO);
-        termios::tcsetattr(0, termios::SetArg::TCSADRAIN, &raw_termios).unwrap();
+        termios::tcsetattr(&stdin, termios::SetArg::TCSADRAIN, &raw_termios).unwrap();
     }
 }
 
@@ -373,6 +377,7 @@ impl Drop for Getch {
 
     #[cfg(not(windows))]
     fn drop(&mut self) {
-        termios::tcsetattr(0, termios::SetArg::TCSADRAIN, &self.orig_term).unwrap();
+        let stdin = std::io::stdin();
+        termios::tcsetattr(&stdin, termios::SetArg::TCSADRAIN, &self.orig_term).unwrap();
     }
 }
