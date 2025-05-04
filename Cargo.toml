@@ -24,4 +24,4 @@ features = [
 libc = "0.2.169"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.29.0", features = ["term"] }
+nix = { version = "0.30.1", features = ["term"] }
